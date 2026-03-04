@@ -1,12 +1,12 @@
 """
 Vercel Serverless Function for ETF Monitoring
-Standalone version - no external imports needed
+Agentic Workflow with Claude Haiku
 """
 import json
-import re
+import os
 from http.server import BaseHTTPRequestHandler
 import requests
-from bs4 import BeautifulSoup
+from anthropic import Anthropic
 
 # Reference data (embedded)
 REFERENCE_DATA = {
@@ -61,116 +61,123 @@ def fetch_url(url, timeout=5):
         return None
 
 
-def extract_name_from_html(html, url):
-    """Extract ETF name from HTML"""
-    soup = BeautifulSoup(html, 'html.parser')
+def extract_with_agent(html, url, reference_name, reference_ter):
+    """
+    Use Claude Haiku to intelligently extract and compare ETF data.
+    Returns structured result with match status and explanation.
+    """
+    # Get API key from environment
+    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    if not api_key:
+        return {
+            'extracted_name': None,
+            'extracted_ter': None,
+            'name_match': False,
+            'ter_match': False,
+            'status': 'FETCH_ERROR',
+            'explanation': 'ANTHROPIC_API_KEY not configured'
+        }
 
-    # Try og:title
-    og_title = soup.find('meta', property='og:title')
-    if og_title and og_title.get('content'):
-        name = og_title['content'].strip()
-        # Clean up: Remove ISIN/WKN suffixes (e.g., "| A41AXG | LU3098954871")
-        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
-        if len(name) > 5:
-            return name, "og:title"
+    # Truncate HTML if too long (keep first 50000 chars - focus on main content)
+    if len(html) > 50000:
+        html = html[:50000]
 
-    # Try h1
-    h1 = soup.find('h1')
-    if h1:
-        name = h1.get_text().strip()
-        # Clean up
-        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
-        if len(name) > 5:
-            return name, "h1"
+    prompt = f"""Du bist ein ETF-Daten-Extractor. Analysiere diese Website und vergleiche die Daten mit den Referenzwerten.
 
-    # Try title
-    title = soup.find('title')
-    if title:
-        name = title.get_text().strip()
-        # Clean up common title suffixes
-        name = re.sub(r'\s*[|\-]\s*(JustETF|ExtraETF|Finanzen\.net|OnVista|Yahoo Finance|comdirect).*$', '', name, flags=re.IGNORECASE)
-        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
-        if len(name) > 5:
-            return name, "title"
+**Referenzdaten (Soll-Werte):**
+- Name: "{reference_name}"
+- TER: {reference_ter}%
 
-    return None, "unknown"
+**Deine Aufgabe:**
+1. Finde den ETF-Namen auf der Website (meist in Title, H1, oder Meta-Tags)
+2. Finde die TER (Total Expense Ratio / laufende Kosten / Gesamtkostenquote)
+   - Kann als "0.69%", "0,69%", "69 bps", oder ähnlich dargestellt sein
+   - 100 bps = 1%
+3. Vergleiche die gefundenen Werte mit den Referenzdaten
 
+**Wichtige Matching-Regeln:**
+- **Name:** Kleine Abweichungen sind OK:
+  - "R EUR" kann fehlen (optional)
+  - "(Acc)" oder "(Thes)" kann fehlen (optional)
+  - ISIN/WKN am Ende ignorieren (z.B. "| LU123456")
+  - Reihenfolge kann leicht variieren
+  - Aber: Hauptbestandteile müssen übereinstimmen (z.B. "General Artificial Intelligence")
 
-def extract_ter_from_html(html, url):
-    """Extract TER from HTML"""
-    keywords = ["TER", "Total Expense Ratio", "Gesamtkostenquote",
-                "laufende Kosten", "Kostenquote"]
+- **TER:** Numerisch gleich wenn auf 2 Dezimalstellen gerundet gleich:
+  - 0.69% = 0,69% = 69 bps = 0.690%
+  - Aber: 0.69% ≠ 0.70%
 
-    text_lower = html.lower()
+**Antwortformat (NUR JSON, keine Erklärung außerhalb):**
+```json
+{{
+  "extracted_name": "Der gefundene ETF-Name (oder null wenn nicht gefunden)",
+  "extracted_ter": 0.69 (nur die Zahl, oder null wenn nicht gefunden),
+  "name_match": true/false,
+  "ter_match": true/false,
+  "explanation": "Kurze Erklärung was gefunden wurde und ob es matched"
+}}
+```
 
-    for keyword in keywords:
-        pos = text_lower.find(keyword.lower())
-        if pos == -1:
-            continue
+**Website HTML:**
+{html}
 
-        context_start = max(0, pos - 50)
-        context_end = min(len(html), pos + 150)
-        context = html[context_start:context_end]
+Analysiere jetzt und gib NUR das JSON zurück."""
 
-        ter_pattern = r'(\d+(?:[.,]\d{1,4})?)\s*%'
-        matches = re.findall(ter_pattern, context, re.IGNORECASE)
+    try:
+        client = Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=500,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-        if matches:
-            for ter_str in matches:
-                ter_str = ter_str.replace(',', '.')
-                try:
-                    ter_value = float(ter_str)
-                    if 0.01 <= ter_value <= 5.0:
-                        evidence = context[max(0, pos-40):min(len(context), pos+80)]
-                        evidence = re.sub(r'<[^>]+>', '', evidence)
-                        evidence = re.sub(r'\s+', ' ', evidence).strip()[:120]
-                        return ter_value, evidence
-                except ValueError:
-                    continue
+        # Parse response
+        content = response.content[0].text
 
-    return None, ""
+        # Extract JSON from response (may be wrapped in markdown)
+        import re
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group(0))
 
+            # Determine status based on matches
+            if data.get('name_match') and data.get('ter_match'):
+                status = 'MATCH'
+            elif not data.get('name_match') and not data.get('ter_match'):
+                status = 'BOTH_MISMATCH'
+            elif not data.get('name_match'):
+                status = 'NAME_MISMATCH'
+            elif not data.get('ter_match'):
+                if data.get('extracted_ter') is None:
+                    status = 'TER_MISSING'
+                else:
+                    status = 'TER_MISMATCH'
+            else:
+                status = 'TER_MISSING'
 
-def normalize_name(name):
-    """Normalize name for comparison"""
-    return ' '.join(name.strip().split())
+            data['status'] = status
+            return data
+        else:
+            return {
+                'extracted_name': None,
+                'extracted_ter': None,
+                'name_match': False,
+                'ter_match': False,
+                'status': 'FETCH_ERROR',
+                'explanation': 'Failed to parse agent response'
+            }
 
-
-def names_match(name1, name2):
-    """Check if names match"""
-    return normalize_name(name1) == normalize_name(name2)
-
-
-def ters_match(ter1, ter2):
-    """Check if TERs match"""
-    return round(ter1, 4) == round(ter2, 4)
-
-
-def compare_result(result, ref_name, ref_ter):
-    """Compare extraction result with reference"""
-    if result.get('error'):
-        return 'FETCH_ERROR'
-
-    name = result.get('name')
-    ter = result.get('ter')
-
-    if name is None:
-        return 'FETCH_ERROR'
-
-    if ter is None:
-        return 'TER_MISSING'
-
-    name_ok = names_match(name, ref_name)
-    ter_ok = ters_match(ter, ref_ter)
-
-    if name_ok and ter_ok:
-        return 'MATCH'
-    elif not name_ok and not ter_ok:
-        return 'BOTH_MISMATCH'
-    elif not name_ok:
-        return 'NAME_MISMATCH'
-    else:
-        return 'TER_MISMATCH'
+    except Exception as e:
+        return {
+            'extracted_name': None,
+            'extracted_ter': None,
+            'name_match': False,
+            'ter_match': False,
+            'status': 'FETCH_ERROR',
+            'explanation': f'Agent error: {str(e)}'
+        }
 
 
 class handler(BaseHTTPRequestHandler):
@@ -184,34 +191,38 @@ class handler(BaseHTTPRequestHandler):
                 ref = REFERENCE_DATA[isin]
 
                 for url in urls:
-                    result = {
-                        'isin': isin,
-                        'url': url,
-                        'name': None,
-                        'name_source': 'unknown',
-                        'ter': None,
-                        'ter_evidence': '',
-                        'error': None
-                    }
-
                     # Fetch HTML
-                    html = fetch_url(url, timeout=3)
+                    html = fetch_url(url, timeout=5)
+
                     if html is None:
-                        result['error'] = 'Failed to fetch URL'
+                        # Failed to fetch
+                        result = {
+                            'isin': isin,
+                            'url': url,
+                            'name': None,
+                            'ter': None,
+                            'status': 'FETCH_ERROR',
+                            'explanation': 'Failed to fetch URL',
+                            'error': 'Failed to fetch URL (timeout or HTTP error)'
+                        }
                     else:
-                        # Extract name
-                        name, name_source = extract_name_from_html(html, url)
-                        result['name'] = name
-                        result['name_source'] = name_source
+                        # Use agent to extract and compare
+                        agent_result = extract_with_agent(
+                            html,
+                            url,
+                            ref['name'],
+                            ref['ter']
+                        )
 
-                        # Extract TER
-                        ter, ter_evidence = extract_ter_from_html(html, url)
-                        result['ter'] = ter
-                        result['ter_evidence'] = ter_evidence
-
-                    # Compare with reference
-                    status = compare_result(result, ref['name'], ref['ter'])
-                    result['status'] = status
+                        result = {
+                            'isin': isin,
+                            'url': url,
+                            'name': agent_result.get('extracted_name'),
+                            'ter': agent_result.get('extracted_ter'),
+                            'status': agent_result.get('status'),
+                            'explanation': agent_result.get('explanation'),
+                            'error': None if agent_result.get('status') != 'FETCH_ERROR' else agent_result.get('explanation')
+                        }
 
                     results.append(result)
 
@@ -220,7 +231,7 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Checking 18 URLs (9 per ETF)'
+                'note': 'Agentic workflow - intelligent extraction with Claude Haiku'
             }
 
             # Send response

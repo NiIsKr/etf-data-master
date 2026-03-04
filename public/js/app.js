@@ -199,62 +199,57 @@ function createResultItem(result, reference) {
 
     let detailsHTML = '';
 
-    // Name comparison - show differences
-    if (result.status === 'NAME_MISMATCH' || result.status === 'BOTH_MISMATCH') {
-        const diff = getNameDifference(reference.name, result.name || '');
+    // Show agent explanation (main insight)
+    if (result.explanation) {
         detailsHTML += `
-            <div class="detail-section">
-                <div class="detail-label">Name-Abweichung:</div>
-                <div style="color: #757575; margin-top: 0.25rem;">
-                    <div>Soll: <strong>${escapeHtml(reference.name)}</strong></div>
-                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${escapeHtml(result.name || 'N/A')}</span></div>
-                    ${diff ? `<div style="margin-top: 0.25rem; font-size: 0.8125rem;">→ ${escapeHtml(diff)}</div>` : ''}
+            <div class="detail-section" style="background: #FAFAFA; padding: 0.75rem; border-radius: 4px; margin-bottom: 0.75rem;">
+                <div style="color: #424242; font-size: 0.875rem; line-height: 1.6;">
+                    ${escapeHtml(result.explanation)}
                 </div>
             </div>
         `;
     }
 
-    // TER comparison - show differences
-    if (result.status === 'TER_MISMATCH' || result.status === 'BOTH_MISMATCH') {
-        detailsHTML += `
-            <div class="detail-section">
-                <div class="detail-label">TER-Abweichung:</div>
-                <div style="color: #757575; margin-top: 0.25rem;">
-                    <div>Soll: <strong>${reference.ter}%</strong></div>
-                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${result.ter !== null ? result.ter + '%' : 'N/A'}</span></div>
-                </div>
-            </div>
-        `;
-    }
-
-    // TER missing - explain what's missing
-    if (result.status === 'TER_MISSING') {
-        detailsHTML += `
-            <div class="detail-section">
-                <div class="detail-label">Status:</div>
-                <div style="color: #757575; margin-top: 0.25rem;">
-                    TER konnte nicht gefunden werden. Die Website zeigt möglicherweise keine TER-Information an.
-                </div>
-            </div>
-        `;
-
-        // Show name status if correct
-        if (result.name) {
-            detailsHTML += `
-                <div class="detail-section">
-                    <div style="color: #2E7D32;">✓ Name korrekt: ${escapeHtml(result.name)}</div>
-                </div>
-            `;
-        }
-    }
-
-    // MATCH - show what matched
+    // Show extracted values
     if (result.status === 'MATCH') {
         detailsHTML += `
             <div class="detail-section">
                 <div style="color: #2E7D32;">
                     ✓ Name: ${escapeHtml(result.name)}<br>
                     ✓ TER: ${result.ter}%
+                </div>
+            </div>
+        `;
+    } else if (result.status === 'NAME_MISMATCH' || result.status === 'BOTH_MISMATCH') {
+        detailsHTML += `
+            <div class="detail-section">
+                <div class="detail-label">Name:</div>
+                <div style="color: #757575; margin-top: 0.25rem;">
+                    <div>Soll: <strong>${escapeHtml(reference.name)}</strong></div>
+                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${escapeHtml(result.name || 'Nicht gefunden')}</span></div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (result.status === 'TER_MISMATCH' || result.status === 'BOTH_MISMATCH') {
+        detailsHTML += `
+            <div class="detail-section">
+                <div class="detail-label">TER:</div>
+                <div style="color: #757575; margin-top: 0.25rem;">
+                    <div>Soll: <strong>${reference.ter}%</strong></div>
+                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${result.ter !== null ? result.ter + '%' : 'Nicht gefunden'}</span></div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (result.status === 'TER_MISSING') {
+        detailsHTML += `
+            <div class="detail-section">
+                <div style="color: #757575;">
+                    ${result.name ? '✓ Name: ' + escapeHtml(result.name) + '<br>' : ''}
+                    ⚠ TER: Nicht gefunden
                 </div>
             </div>
         `;
