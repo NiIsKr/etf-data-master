@@ -20,17 +20,29 @@ REFERENCE_DATA = {
     }
 }
 
-# Source URLs (embedded)
+# Source URLs (embedded) - All 9 per ETF
 SOURCES = {
     "LU3098954871": [
         "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871",
         "https://extraetf.com/de/etf-profile/LU3098954871",
-        "https://www.finanzfluss.de/informer/etf/lu3098954871/"
+        "https://www.finanzfluss.de/informer/etf/lu3098954871/",
+        "https://www.comdirect.de/inf/etfs/LU3098954871",
+        "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
+        "https://www.finanzen.net/etf/teq-general-artificial-intelligence-etf-r-lu3098954871",
+        "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
+        "https://de.finance.yahoo.com/quote/TGAI.DE/",
+        "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
     ],
     "LU3075459852": [
         "https://www.justetf.com/de/etf-profile.html?isin=LU3075459852",
         "https://extraetf.com/de/etf-profile/LU3075459852",
-        "https://www.finanzfluss.de/informer/etf/lu3075459852/"
+        "https://www.finanzfluss.de/informer/etf/lu3075459852/",
+        "https://www.comdirect.de/inf/etfs/LU3075459852",
+        "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
+        "https://www.finanzen.net/etf/inyova-impact-investing-active-equity-fund-etf-lu3075459852",
+        "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
+        "https://de.finance.yahoo.com/quote/INY0.DE/",
+        "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
     ]
 }
 
@@ -57,6 +69,8 @@ def extract_name_from_html(html, url):
     og_title = soup.find('meta', property='og:title')
     if og_title and og_title.get('content'):
         name = og_title['content'].strip()
+        # Clean up: Remove ISIN/WKN suffixes (e.g., "| A41AXG | LU3098954871")
+        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
         if len(name) > 5:
             return name, "og:title"
 
@@ -64,6 +78,8 @@ def extract_name_from_html(html, url):
     h1 = soup.find('h1')
     if h1:
         name = h1.get_text().strip()
+        # Clean up
+        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
         if len(name) > 5:
             return name, "h1"
 
@@ -71,6 +87,9 @@ def extract_name_from_html(html, url):
     title = soup.find('title')
     if title:
         name = title.get_text().strip()
+        # Clean up common title suffixes
+        name = re.sub(r'\s*[|\-]\s*(JustETF|ExtraETF|Finanzen\.net|OnVista|Yahoo Finance|comdirect).*$', '', name, flags=re.IGNORECASE)
+        name = re.split(r'\s*[|\-]\s*(?:[A-Z0-9]{6,}|LU\d+)', name)[0].strip()
         if len(name) > 5:
             return name, "title"
 
@@ -201,7 +220,7 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Quick scan (3 URLs per ETF)'
+                'note': 'Checking 18 URLs (9 per ETF)'
             }
 
             # Send response
