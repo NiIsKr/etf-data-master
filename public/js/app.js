@@ -1,4 +1,4 @@
-// ETF Monitor - Frontend Application
+// ETF Monitor - Frontend Application (Naro Style)
 
 let monitoringInProgress = false;
 
@@ -32,7 +32,6 @@ function saveSettings() {
     const slackWebhook = slackWebhookInput.value.trim();
     localStorage.setItem('slackWebhook', slackWebhook);
 
-    // Show feedback
     const originalText = saveSettingsBtn.textContent;
     saveSettingsBtn.textContent = '✓ Gespeichert!';
     saveSettingsBtn.disabled = true;
@@ -49,15 +48,13 @@ async function startMonitoring() {
 
     monitoringInProgress = true;
     startBtn.disabled = true;
-    startBtn.innerHTML = '<span class="btn-icon">⏳</span> Läuft...';
+    startBtn.textContent = 'Läuft...';
     progressContainer.style.display = 'block';
     resultsContainer.style.display = 'none';
 
     try {
-        // Get Slack webhook from settings
         const slackWebhook = localStorage.getItem('slackWebhook') || '';
 
-        // Call API to start monitoring
         progressText.textContent = 'Starte Monitoring...';
         progressBar.style.width = '10%';
 
@@ -83,7 +80,6 @@ async function startMonitoring() {
         progressBar.style.width = '100%';
         progressText.textContent = 'Fertig!';
 
-        // Display results
         setTimeout(() => {
             displayResults(data);
             progressContainer.style.display = 'none';
@@ -91,7 +87,7 @@ async function startMonitoring() {
 
     } catch (error) {
         console.error('Error:', error);
-        progressText.textContent = '❌ Fehler: ' + error.message;
+        progressText.textContent = '✗ Fehler: ' + error.message;
         progressBar.style.width = '0%';
 
         setTimeout(() => {
@@ -100,7 +96,7 @@ async function startMonitoring() {
     } finally {
         monitoringInProgress = false;
         startBtn.disabled = false;
-        startBtn.innerHTML = '<span class="btn-icon">▶</span> Check starten';
+        startBtn.textContent = 'Check starten';
     }
 }
 
@@ -108,37 +104,30 @@ async function startMonitoring() {
 function displayResults(data) {
     resultsContainer.style.display = 'block';
 
-    // Update stats
     const stats = calculateStats(data.results);
     totalChecked.textContent = stats.total;
     totalMatches.textContent = stats.matches;
     totalMismatches.textContent = stats.mismatches;
     totalMissing.textContent = stats.missing;
 
-    // Update last update time
     const now = new Date();
     lastUpdate.textContent = `Zuletzt aktualisiert: ${now.toLocaleString('de-DE')}`;
 
-    // Clear previous results
     resultsList.innerHTML = '';
 
-    // Group by ISIN
     const groupedResults = groupByISIN(data.results);
 
-    // Display each ISIN group
     for (const [isin, results] of Object.entries(groupedResults)) {
         const reference = data.reference[isin];
         const isinHeader = createISINHeader(isin, reference);
         resultsList.appendChild(isinHeader);
 
-        // Display each result
         results.forEach(result => {
             const resultItem = createResultItem(result, reference);
             resultsList.appendChild(resultItem);
         });
     }
 
-    // Scroll to results
     resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -179,24 +168,23 @@ function groupByISIN(results) {
 // Create ISIN header
 function createISINHeader(isin, reference) {
     const header = document.createElement('div');
-    header.style.cssText = 'background: #f3f4f6; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;';
+    header.style.cssText = 'padding: 1rem; border-bottom: 1px solid #E0E0E0; margin-bottom: 1.25rem; background: #FAFAFA;';
     header.innerHTML = `
-        <div style="font-weight: 700; font-size: 1.125rem; margin-bottom: 0.25rem;">
-            ${reference.name}
+        <div style="font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; color: #000;">
+            ${escapeHtml(reference.name)}
         </div>
-        <div style="color: #6b7280; font-size: 0.875rem;">
+        <div style="color: #757575; font-size: 0.8125rem;">
             ISIN: ${isin} • Soll-TER: ${reference.ter}%
         </div>
     `;
     return header;
 }
 
-// Create result item
+// Create result item with detailed error messages
 function createResultItem(result, reference) {
     const item = document.createElement('div');
     item.className = 'result-item';
 
-    // Determine status class and label
     let statusClass, statusLabel;
     if (result.status === 'MATCH') {
         statusClass = 'status-match';
@@ -209,73 +197,84 @@ function createResultItem(result, reference) {
         statusLabel = '⚠ Unvollständig';
     }
 
-    // Build details HTML
     let detailsHTML = '';
 
-    // Name details
+    // Name comparison - show differences
     if (result.status === 'NAME_MISMATCH' || result.status === 'BOTH_MISMATCH') {
+        const diff = getNameDifference(reference.name, result.name || '');
         detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">Name (Soll):</span>
-                <span class="result-value">${escapeHtml(reference.name)}</span>
-            </div>
-            <div class="result-detail-row">
-                <span class="result-label">Name (Ist):</span>
-                <span class="result-value mismatch">${escapeHtml(result.name || 'N/A')}</span>
-            </div>
-        `;
-    } else if (result.name) {
-        detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">Name:</span>
-                <span class="result-value">${escapeHtml(result.name)}</span>
+            <div class="detail-section">
+                <div class="detail-label">Name-Abweichung:</div>
+                <div style="color: #757575; margin-top: 0.25rem;">
+                    <div>Soll: <strong>${escapeHtml(reference.name)}</strong></div>
+                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${escapeHtml(result.name || 'N/A')}</span></div>
+                    ${diff ? `<div style="margin-top: 0.25rem; font-size: 0.8125rem;">→ ${escapeHtml(diff)}</div>` : ''}
+                </div>
             </div>
         `;
     }
 
-    // TER details
+    // TER comparison - show differences
     if (result.status === 'TER_MISMATCH' || result.status === 'BOTH_MISMATCH') {
         detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">TER (Soll):</span>
-                <span class="result-value">${reference.ter}%</span>
-            </div>
-            <div class="result-detail-row">
-                <span class="result-label">TER (Ist):</span>
-                <span class="result-value mismatch">${result.ter !== null ? result.ter + '%' : 'N/A'}</span>
-            </div>
-        `;
-    } else if (result.ter !== null) {
-        detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">TER:</span>
-                <span class="result-value">${result.ter}%</span>
+            <div class="detail-section">
+                <div class="detail-label">TER-Abweichung:</div>
+                <div style="color: #757575; margin-top: 0.25rem;">
+                    <div>Soll: <strong>${reference.ter}%</strong></div>
+                    <div style="margin-top: 0.25rem;">Ist: <span style="color: #C62828; font-weight: 500;">${result.ter !== null ? result.ter + '%' : 'N/A'}</span></div>
+                </div>
             </div>
         `;
     }
 
-    // Source and error info
-    if (result.name_source) {
+    // TER missing - explain what's missing
+    if (result.status === 'TER_MISSING') {
         detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">Quelle:</span>
-                <span class="result-value">${result.name_source}</span>
+            <div class="detail-section">
+                <div class="detail-label">Status:</div>
+                <div style="color: #757575; margin-top: 0.25rem;">
+                    TER konnte nicht gefunden werden. Die Website zeigt möglicherweise keine TER-Information an.
+                </div>
+            </div>
+        `;
+
+        // Show name status if correct
+        if (result.name) {
+            detailsHTML += `
+                <div class="detail-section">
+                    <div style="color: #2E7D32;">✓ Name korrekt: ${escapeHtml(result.name)}</div>
+                </div>
+            `;
+        }
+    }
+
+    // MATCH - show what matched
+    if (result.status === 'MATCH') {
+        detailsHTML += `
+            <div class="detail-section">
+                <div style="color: #2E7D32;">
+                    ✓ Name: ${escapeHtml(result.name)}<br>
+                    ✓ TER: ${result.ter}%
+                </div>
             </div>
         `;
     }
 
+    // Error cases
     if (result.error) {
         detailsHTML += `
-            <div class="result-detail-row">
-                <span class="result-label">Fehler:</span>
-                <span class="result-value mismatch">${escapeHtml(result.error)}</span>
+            <div class="detail-section">
+                <div class="detail-label">Fehler:</div>
+                <div style="color: #C62828; margin-top: 0.25rem;">
+                    ${escapeHtml(result.error)}
+                </div>
             </div>
         `;
     }
 
     item.innerHTML = `
         <div class="result-header">
-            <div class="result-etf">${getDomainFromURL(result.url)}</div>
+            <div class="result-domain">${getDomainFromURL(result.url)}</div>
             <span class="result-status ${statusClass}">${statusLabel}</span>
         </div>
         <div class="result-url">${escapeHtml(result.url)}</div>
@@ -285,6 +284,23 @@ function createResultItem(result, reference) {
     `;
 
     return item;
+}
+
+// Get name difference description
+function getNameDifference(expected, actual) {
+    if (!actual) return 'Name nicht gefunden';
+
+    const expectedLower = expected.toLowerCase();
+    const actualLower = actual.toLowerCase();
+
+    if (expectedLower.includes(actualLower)) {
+        const missing = expected.replace(new RegExp(actual.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').trim();
+        return `Fehlt: "${missing}"`;
+    } else if (actualLower.includes(expectedLower)) {
+        return 'Enthält zusätzliche Zeichen';
+    } else {
+        return 'Komplett unterschiedlich';
+    }
 }
 
 // Helper function to get domain from URL
@@ -310,14 +326,3 @@ saveSettingsBtn.addEventListener('click', saveSettings);
 
 // Load settings on page load
 loadSettings();
-
-// Check if we have recent results in sessionStorage
-const recentResults = sessionStorage.getItem('recentResults');
-if (recentResults) {
-    try {
-        const data = JSON.parse(recentResults);
-        displayResults(data);
-    } catch (e) {
-        console.error('Failed to load recent results:', e);
-    }
-}

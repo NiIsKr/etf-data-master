@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ETF Monitor - Dashboard</title>
+    <title>ETF Monitor</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>🔍 ETF Monitor</h1>
+            <h1>ETF Monitor</h1>
             <p class="subtitle">Überwache ETF-Namen und TER auf 18 Finanz-Websites</p>
         </header>
 
@@ -23,7 +23,7 @@
                     auf allen wichtigen deutschen Finanz-Websites.
                 </p>
                 <button id="startMonitoring" class="btn btn-primary">
-                    <span class="btn-icon">▶</span> Check starten
+                    Check starten
                 </button>
                 <div id="progress" class="progress-container" style="display: none;">
                     <div class="progress-bar">
@@ -38,25 +38,25 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Ergebnisse</h2>
-                    <span id="lastUpdate" class="last-update"></span>
+                    <div id="lastUpdate" class="last-update"></div>
                 </div>
                 <div class="card-body">
                     <div class="stats-grid">
-                        <div class="stat-card stat-total">
+                        <div class="stat-card">
                             <div class="stat-number" id="totalChecked">0</div>
                             <div class="stat-label">URLs geprüft</div>
                         </div>
-                        <div class="stat-card stat-success">
+                        <div class="stat-card">
                             <div class="stat-number" id="totalMatches">0</div>
-                            <div class="stat-label">✅ Korrekt</div>
+                            <div class="stat-label">✓ Korrekt</div>
                         </div>
-                        <div class="stat-card stat-warning">
+                        <div class="stat-card">
                             <div class="stat-number" id="totalMismatches">0</div>
-                            <div class="stat-label">❌ Fehler</div>
+                            <div class="stat-label">✗ Fehler</div>
                         </div>
-                        <div class="stat-card stat-info">
+                        <div class="stat-card">
                             <div class="stat-number" id="totalMissing">0</div>
-                            <div class="stat-label">⚠️ Unvollständig</div>
+                            <div class="stat-label">⚠ Unvollständig</div>
                         </div>
                     </div>
 
