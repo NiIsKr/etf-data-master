@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF Monitor - Dashboard</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 ETF Monitor</h1>
+            <p class="subtitle">Überwache ETF-Namen und TER auf 18 Finanz-Websites</p>
+        </header>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Monitoring starten</h2>
+            </div>
+            <div class="card-body">
+                <p class="info">
+                    Überprüft automatisch die Namen und TER (laufende Kosten) für TEQ und Inyova ETFs
+                    auf allen wichtigen deutschen Finanz-Websites.
+                </p>
+                <button id="startMonitoring" class="btn btn-primary">
+                    <span class="btn-icon">▶</span> Check starten
+                </button>
+                <div id="progress" class="progress-container" style="display: none;">
+                    <div class="progress-bar">
+                        <div id="progressBar" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText" class="progress-text">Starte...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="resultsContainer" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Ergebnisse</h2>
+                    <span id="lastUpdate" class="last-update"></span>
+                </div>
+                <div class="card-body">
+                    <div class="stats-grid">
+                        <div class="stat-card stat-total">
+                            <div class="stat-number" id="totalChecked">0</div>
+                            <div class="stat-label">URLs geprüft</div>
+                        </div>
+                        <div class="stat-card stat-success">
+                            <div class="stat-number" id="totalMatches">0</div>
+                            <div class="stat-label">✅ Korrekt</div>
+                        </div>
+                        <div class="stat-card stat-warning">
+                            <div class="stat-number" id="totalMismatches">0</div>
+                            <div class="stat-label">❌ Fehler</div>
+                        </div>
+                        <div class="stat-card stat-info">
+                            <div class="stat-number" id="totalMissing">0</div>
+                            <div class="stat-label">⚠️ Unvollständig</div>
+                        </div>
+                    </div>
+
+                    <div id="resultsList" class="results-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>Einstellungen</h2>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="slackWebhook">Slack Webhook URL (optional)</label>
+                    <input
+                        type="text"
+                        id="slackWebhook"
+                        placeholder="https://hooks.slack.com/services/..."
+                        class="form-input"
+                    >
+                    <p class="form-help">
+                        Erhalte Benachrichtigungen bei neuen Fehlern oder behobenen Problemen.
+                        <a href="https://api.slack.com/messaging/webhooks" target="_blank">Webhook erstellen</a>
+                    </p>
+                </div>
+                <button id="saveSettings" class="btn btn-secondary">Einstellungen speichern</button>
+            </div>
+        </div>
+
+        <footer>
+            <p>
+                <strong>Überwachte ETFs:</strong><br>
+                TEQ - General AI (LU3098954871) • TER: 0.69%<br>
+                Inyova Impact Investing (LU3075459852) • TER: 0.95%
+            </p>
+            <p class="small">
+                Geprüfte Quellen: JustETF, ExtraETF, Finanzfluss, Comdirect, AVL,
+                Finanzen.net, OnVista, Yahoo Finance, Deutsche Börse
+            </p>
+        </footer>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,26 +1,13 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "web/public/**",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "web/api/*.py",
-      "use": "@vercel/python"
-    }
-  ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/web/api/$1"
+      "src": "/api/monitor",
+      "dest": "/api/monitor.py"
     },
     {
       "src": "/(.*)",
-      "dest": "/web/public/$1"
+      "dest": "/public/$1"
     }
-  ],
-  "env": {
-    "PYTHONPATH": "/var/task"
-  }
+  ]
 }
