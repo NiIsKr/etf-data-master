@@ -21,22 +21,38 @@ REFERENCE_DATA = {
     }
 }
 
-# Source URLs (embedded) - Limit to 2 per ETF for speed
+# Source URLs (embedded) - Full list (9 per ETF = 18 total)
 SOURCES = {
     "LU3098954871": [
+        # ISIN-based URLs
         "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871",
         "https://extraetf.com/de/etf-profile/LU3098954871",
-        "https://www.finanzfluss.de/informer/etf/lu3098954871/"
+        "https://www.finanzfluss.de/informer/etf/lu3098954871/",
+        "https://www.comdirect.de/inf/etfs/LU3098954871",
+        "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
+        # Hardcoded URLs (slug-based)
+        "https://www.finanzen.net/etf/teq-general-artificial-intelligence-etf-r-lu3098954871",
+        "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
+        "https://de.finance.yahoo.com/quote/TGAI.DE/",
+        "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
     ],
     "LU3075459852": [
+        # ISIN-based URLs
         "https://www.justetf.com/de/etf-profile.html?isin=LU3075459852",
         "https://extraetf.com/de/etf-profile/LU3075459852",
-        "https://www.finanzfluss.de/informer/etf/lu3075459852/"
+        "https://www.finanzfluss.de/informer/etf/lu3075459852/",
+        "https://www.comdirect.de/inf/etfs/LU3075459852",
+        "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
+        # Hardcoded URLs (slug-based)
+        "https://www.finanzen.net/etf/inyova-impact-investing-active-equity-fund-etf-lu3075459852",
+        "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
+        "https://de.finance.yahoo.com/quote/INY0.DE/",
+        "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
     ]
 }
 
 
-def fetch_url(url, timeout=5):
+def fetch_url(url, timeout=4):
     """Fetch HTML from URL"""
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; ETF-Monitor/1.0)",
@@ -172,7 +188,7 @@ Analysiere jetzt und gib NUR das JSON zurück."""
 def process_single_url(isin, url, ref):
     """Process a single URL (used for parallel processing)"""
     # Fetch HTML
-    html = fetch_url(url, timeout=5)
+    html = fetch_url(url, timeout=4)
 
     if html is None:
         # Failed to fetch
@@ -215,12 +231,12 @@ class handler(BaseHTTPRequestHandler):
             tasks = []
             for isin, urls in SOURCES.items():
                 ref = REFERENCE_DATA[isin]
-                # Limit to 3 URLs per ETF (6 total) to stay under timeout
-                for url in urls[:3]:
+                # Check all URLs (9 per ETF = 18 total)
+                for url in urls:
                     tasks.append((isin, url, ref))
 
-            # Process URLs in parallel (max 6 workers)
-            with ThreadPoolExecutor(max_workers=6) as executor:
+            # Process URLs in parallel (max 10 workers for 18 URLs)
+            with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 
                 for future in as_completed(futures):
