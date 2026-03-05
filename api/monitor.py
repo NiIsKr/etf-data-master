@@ -21,29 +21,29 @@ REFERENCE_DATA = {
     }
 }
 
-# Source URLs (embedded) - Full list (9 per ETF = 18 total)
+# Source URLs (embedded) - Full list (9 per ETF = 18 total, split across 2 requests)
 SOURCES = {
     "LU3098954871": [
-        # ISIN-based URLs
+        # ISIN-based URLs (5)
         "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871",
         "https://extraetf.com/de/etf-profile/LU3098954871",
         "https://www.finanzfluss.de/informer/etf/lu3098954871/",
         "https://www.comdirect.de/inf/etfs/LU3098954871",
         "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
-        # Hardcoded URLs (slug-based)
+        # Hardcoded URLs (4)
         "https://www.finanzen.net/etf/teq-general-artificial-intelligence-etf-r-lu3098954871",
         "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
         "https://de.finance.yahoo.com/quote/TGAI.DE/",
         "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
     ],
     "LU3075459852": [
-        # ISIN-based URLs
+        # ISIN-based URLs (5)
         "https://www.justetf.com/de/etf-profile.html?isin=LU3075459852",
         "https://extraetf.com/de/etf-profile/LU3075459852",
         "https://www.finanzfluss.de/informer/etf/lu3075459852/",
         "https://www.comdirect.de/inf/etfs/LU3075459852",
         "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
-        # Hardcoded URLs (slug-based)
+        # Hardcoded URLs (4)
         "https://www.finanzen.net/etf/inyova-impact-investing-active-equity-fund-etf-lu3075459852",
         "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
         "https://de.finance.yahoo.com/quote/INY0.DE/",
@@ -225,17 +225,27 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST request to start monitoring"""
         try:
+            # Parse request body to get optional ISIN filter
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
+            request_data = json.loads(body)
+            filter_isin = request_data.get('isin')  # Optional: check only this ISIN
+
             results = []
 
-            # Collect all URLs to check
+            # Collect URLs to check (filtered by ISIN if specified)
             tasks = []
             for isin, urls in SOURCES.items():
+                # Skip if filter_isin is set and doesn't match
+                if filter_isin and isin != filter_isin:
+                    continue
+
                 ref = REFERENCE_DATA[isin]
-                # Check all URLs (9 per ETF = 18 total)
+                # Check all URLs for this ISIN (9 URLs)
                 for url in urls:
                     tasks.append((isin, url, ref))
 
-            # Process URLs in parallel (max 10 workers for 18 URLs)
+            # Process URLs in parallel (max 10 workers, handles 9 URLs per request)
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 

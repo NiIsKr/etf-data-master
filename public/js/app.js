@@ -42,7 +42,7 @@ function saveSettings() {
     }, 2000);
 }
 
-// Start monitoring
+// Start monitoring (two sequential requests for 18 URLs total)
 async function startMonitoring() {
     if (monitoringInProgress) return;
 
@@ -54,34 +54,65 @@ async function startMonitoring() {
 
     try {
         const slackWebhook = localStorage.getItem('slackWebhook') || '';
+        const allResults = [];
 
-        progressText.textContent = 'Starte Monitoring...';
+        // Request 1: Check TEQ (9 URLs)
+        progressText.textContent = 'Prüfe TEQ ETF... (1/2)';
         progressBar.style.width = '10%';
 
-        const response = await fetch('/api/monitor', {
+        const response1 = await fetch('/api/monitor', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
+                isin: 'LU3098954871',
                 slack_webhook: slackWebhook
             })
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response1.ok) {
+            throw new Error(`HTTP error! status: ${response1.status}`);
         }
 
-        progressBar.style.width = '50%';
-        progressText.textContent = 'Analysiere Websites...';
+        const data1 = await response1.json();
+        allResults.push(...data1.results);
 
-        const data = await response.json();
+        progressBar.style.width = '50%';
+        progressText.textContent = 'Prüfe Inyova ETF... (2/2)';
+
+        // Request 2: Check Inyova (9 URLs)
+        const response2 = await fetch('/api/monitor', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                isin: 'LU3075459852',
+                slack_webhook: slackWebhook
+            })
+        });
+
+        if (!response2.ok) {
+            throw new Error(`HTTP error! status: ${response2.status}`);
+        }
+
+        const data2 = await response2.json();
+        allResults.push(...data2.results);
 
         progressBar.style.width = '100%';
-        progressText.textContent = 'Fertig!';
+        progressText.textContent = 'Fertig! 18 URLs geprüft.';
+
+        // Combine results from both requests
+        const combinedData = {
+            success: true,
+            results: allResults,
+            reference: data1.reference,  // Same for both
+            note: 'Agentic workflow (parallel) - intelligent extraction with Claude Haiku'
+        };
 
         setTimeout(() => {
-            displayResults(data);
+            displayResults(combinedData);
             progressContainer.style.display = 'none';
         }, 500);
 
