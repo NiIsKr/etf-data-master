@@ -1,12 +1,13 @@
 """
 Vercel Serverless Function for ETF Monitoring
-Agentic Workflow with Claude Haiku
+Agentic Workflow with Claude Haiku + Parallel Processing
 """
 import json
 import os
 from http.server import BaseHTTPRequestHandler
 import requests
 from anthropic import Anthropic
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Reference data (embedded)
 REFERENCE_DATA = {
@@ -20,29 +21,17 @@ REFERENCE_DATA = {
     }
 }
 
-# Source URLs (embedded) - All 9 per ETF
+# Source URLs (embedded) - Limit to 2 per ETF for speed
 SOURCES = {
     "LU3098954871": [
         "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871",
         "https://extraetf.com/de/etf-profile/LU3098954871",
-        "https://www.finanzfluss.de/informer/etf/lu3098954871/",
-        "https://www.comdirect.de/inf/etfs/LU3098954871",
-        "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
-        "https://www.finanzen.net/etf/teq-general-artificial-intelligence-etf-r-lu3098954871",
-        "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
-        "https://de.finance.yahoo.com/quote/TGAI.DE/",
-        "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
+        "https://www.finanzfluss.de/informer/etf/lu3098954871/"
     ],
     "LU3075459852": [
         "https://www.justetf.com/de/etf-profile.html?isin=LU3075459852",
         "https://extraetf.com/de/etf-profile/LU3075459852",
-        "https://www.finanzfluss.de/informer/etf/lu3075459852/",
-        "https://www.comdirect.de/inf/etfs/LU3075459852",
-        "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
-        "https://www.finanzen.net/etf/inyova-impact-investing-active-equity-fund-etf-lu3075459852",
-        "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
-        "https://de.finance.yahoo.com/quote/INY0.DE/",
-        "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
+        "https://www.finanzfluss.de/informer/etf/lu3075459852/"
     ]
 }
 
@@ -78,9 +67,9 @@ def extract_with_agent(html, url, reference_name, reference_ter):
             'explanation': 'ANTHROPIC_API_KEY not configured'
         }
 
-    # Truncate HTML if too long (keep first 50000 chars - focus on main content)
-    if len(html) > 50000:
-        html = html[:50000]
+    # Truncate HTML if too long (keep first 30000 chars - focus on main content)
+    if len(html) > 30000:
+        html = html[:30000]
 
     prompt = f"""Du bist ein ETF-Daten-Extractor. Analysiere diese Website und vergleiche die Daten mit den Referenzwerten.
 
@@ -180,58 +169,82 @@ Analysiere jetzt und gib NUR das JSON zurück."""
         }
 
 
+def process_single_url(isin, url, ref):
+    """Process a single URL (used for parallel processing)"""
+    # Fetch HTML
+    html = fetch_url(url, timeout=5)
+
+    if html is None:
+        # Failed to fetch
+        return {
+            'isin': isin,
+            'url': url,
+            'name': None,
+            'ter': None,
+            'status': 'FETCH_ERROR',
+            'explanation': 'Failed to fetch URL',
+            'error': 'Failed to fetch URL (timeout or HTTP error)'
+        }
+    else:
+        # Use agent to extract and compare
+        agent_result = extract_with_agent(
+            html,
+            url,
+            ref['name'],
+            ref['ter']
+        )
+
+        return {
+            'isin': isin,
+            'url': url,
+            'name': agent_result.get('extracted_name'),
+            'ter': agent_result.get('extracted_ter'),
+            'status': agent_result.get('status'),
+            'explanation': agent_result.get('explanation'),
+            'error': None if agent_result.get('status') != 'FETCH_ERROR' else agent_result.get('explanation')
+        }
+
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST request to start monitoring"""
         try:
             results = []
 
-            # Check each ISIN
+            # Collect all URLs to check
+            tasks = []
             for isin, urls in SOURCES.items():
                 ref = REFERENCE_DATA[isin]
+                # Limit to 3 URLs per ETF (6 total) to stay under timeout
+                for url in urls[:3]:
+                    tasks.append((isin, url, ref))
 
-                for url in urls:
-                    # Fetch HTML
-                    html = fetch_url(url, timeout=5)
+            # Process URLs in parallel (max 6 workers)
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 
-                    if html is None:
-                        # Failed to fetch
-                        result = {
-                            'isin': isin,
-                            'url': url,
+                for future in as_completed(futures):
+                    try:
+                        result = future.result()
+                        results.append(result)
+                    except Exception as e:
+                        # Handle individual task failure
+                        results.append({
+                            'isin': 'unknown',
+                            'url': 'unknown',
                             'name': None,
                             'ter': None,
                             'status': 'FETCH_ERROR',
-                            'explanation': 'Failed to fetch URL',
-                            'error': 'Failed to fetch URL (timeout or HTTP error)'
-                        }
-                    else:
-                        # Use agent to extract and compare
-                        agent_result = extract_with_agent(
-                            html,
-                            url,
-                            ref['name'],
-                            ref['ter']
-                        )
-
-                        result = {
-                            'isin': isin,
-                            'url': url,
-                            'name': agent_result.get('extracted_name'),
-                            'ter': agent_result.get('extracted_ter'),
-                            'status': agent_result.get('status'),
-                            'explanation': agent_result.get('explanation'),
-                            'error': None if agent_result.get('status') != 'FETCH_ERROR' else agent_result.get('explanation')
-                        }
-
-                    results.append(result)
+                            'explanation': f'Task failed: {str(e)}',
+                            'error': str(e)
+                        })
 
             # Prepare response
             response_data = {
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Agentic workflow - intelligent extraction with Claude Haiku'
+                'note': 'Agentic workflow (parallel) - intelligent extraction with Claude Haiku'
             }
 
             # Send response
