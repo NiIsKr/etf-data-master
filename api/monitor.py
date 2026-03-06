@@ -323,7 +323,7 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Agentic workflow (parallel) - intelligent extraction with Claude Haiku'
+                'note': 'Agent-only workflow (18 parallel calls) - intelligent extraction & comparison with Claude Haiku'
             }
 
             # Send response
