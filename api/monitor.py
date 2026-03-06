@@ -141,9 +141,9 @@ def extract_with_agent(html, url, reference_name, reference_ter):
             'explanation': 'ANTHROPIC_API_KEY not configured'
         }
 
-    # Truncate HTML if too long (keep first 8000 chars to reduce tokens)
-    if len(html) > 8000:
-        html = html[:8000]
+    # Truncate HTML if too long (keep first 5000 chars to reduce tokens - aggressive!)
+    if len(html) > 5000:
+        html = html[:5000]
 
     prompt = f"""Du bist ein ETF-Daten-Extractor. Analysiere diese Website und vergleiche die Daten mit den Referenzwerten.
 
@@ -245,6 +245,8 @@ Analysiere jetzt und gib NUR das JSON zurück."""
 
 def process_single_url(isin, url, ref):
     """Process a single URL (used for parallel processing)"""
+    import time
+
     # Fetch HTML
     html = fetch_url(url, timeout=4)
 
@@ -260,44 +262,16 @@ def process_single_url(isin, url, ref):
             'error': 'Failed to fetch URL (timeout or HTTP error)'
         }
 
-    # Try heuristic extraction first (fast, no LLM)
-    heuristic_name, heuristic_ter = extract_with_heuristics(html, ref['name'], ref['ter'])
-
-    # If heuristic found both name and TER, use it (no agent needed!)
-    if heuristic_name and heuristic_ter is not None:
-        # Compare with reference
-        def normalize_name(name):
-            return ' '.join(name.strip().split())
-
-        name_match = normalize_name(heuristic_name) == normalize_name(ref['name'])
-        ter_match = round(heuristic_ter, 4) == round(ref['ter'], 4)
-
-        if name_match and ter_match:
-            status = 'MATCH'
-        elif not name_match and not ter_match:
-            status = 'BOTH_MISMATCH'
-        elif not name_match:
-            status = 'NAME_MISMATCH'
-        else:
-            status = 'TER_MISMATCH'
-
-        return {
-            'isin': isin,
-            'url': url,
-            'name': heuristic_name,
-            'ter': heuristic_ter,
-            'status': status,
-            'explanation': f'Heuristic extraction: {status}',
-            'error': None
-        }
-
-    # Fallback to agent if heuristic failed
+    # Always use agent (intelligent extraction + comparison)
     agent_result = extract_with_agent(
         html,
         url,
         ref['name'],
         ref['ter']
     )
+
+    # Small delay to avoid rate limiting (distributed over time)
+    time.sleep(0.15)  # 150ms delay between agent calls
 
     return {
         'isin': isin,
