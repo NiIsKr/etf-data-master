@@ -22,9 +22,28 @@
                     Überprüft automatisch die Namen und TER (laufende Kosten) für TEQ und Inyova ETFs
                     auf allen wichtigen deutschen Finanz-Websites.
                 </p>
-                <button id="startMonitoring" class="btn btn-primary">
-                    Check starten
-                </button>
+
+                <div class="etf-buttons">
+                    <button id="checkTeqBtn" class="btn btn-etf" data-isin="LU3098954871">
+                        <span class="btn-label">Check TEQ</span>
+                        <span id="teqStatus" class="status-indicator"></span>
+                    </button>
+
+                    <button id="checkInyovaBtn" class="btn btn-etf" data-isin="LU3075459852">
+                        <span class="btn-label">Check Inyova</span>
+                        <span id="inyovaStatus" class="status-indicator"></span>
+                    </button>
+
+                    <button id="checkAllBtn" class="btn btn-all">
+                        Check ALL (⚠️ Slower)
+                    </button>
+                </div>
+
+                <div id="lastChecked" class="last-checked-info">
+                    <small id="teqLastChecked">TEQ: Nie geprüft</small> •
+                    <small id="inyovaLastChecked">Inyova: Nie geprüft</small>
+                </div>
+
                 <div id="progress" class="progress-container" style="display: none;">
                     <div class="progress-bar">
                         <div id="progressBar" class="progress-fill"></div>

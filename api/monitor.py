@@ -215,9 +215,18 @@ def extract_with_agent(html, url, reference_name, reference_ter):
             'explanation': 'ANTHROPIC_API_KEY not configured'
         }
 
-    # Truncate HTML if too long (keep first 5000 chars to reduce tokens - aggressive!)
-    if len(html) > 5000:
-        html = html[:5000]
+    # Domain-specific HTML truncation
+    # Yahoo Finance needs more HTML to find TER data in JavaScript bundles
+    if 'finance.yahoo.com' in url:
+        max_chars = 12000  # Yahoo's TER data is deeper in HTML
+    elif 'finanzfluss.de' in url:
+        max_chars = 8000   # German sites are well-structured
+    else:
+        max_chars = 6000   # Default: balance between tokens and data
+
+    # Truncate HTML if too long
+    if len(html) > max_chars:
+        html = html[:max_chars]
 
     prompt = f"""Du bist ein ETF-Daten-Extractor. Analysiere diese Website und vergleiche die Daten mit den Referenzwerten.
 
@@ -360,19 +369,40 @@ def process_single_url(isin, url, ref):
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        """Handle POST request to start monitoring"""
+        """Handle POST request to start monitoring (single ETF or all)"""
         try:
+            # Parse request body to get optional ISIN parameter
+            content_length = int(self.headers.get('Content-Length', 0))
+            target_isin = None
+
+            if content_length > 0:
+                body = self.rfile.read(content_length).decode('utf-8')
+                try:
+                    data = json.loads(body)
+                    target_isin = data.get('isin')  # Optional: specific ETF
+                except:
+                    pass  # No body or invalid JSON = check all
+
             results = []
 
-            # Collect all URLs to check (16 total)
+            # Collect URLs to check (filtered by ISIN if provided)
             tasks = []
             for isin, urls in SOURCES.items():
+                # Skip if filtering by ISIN and this isn't it
+                if target_isin and isin != target_isin:
+                    continue
+
                 ref = REFERENCE_DATA[isin]
-                # Check all URLs for this ISIN (8 URLs per ETF = 16 total)
                 for url in urls:
                     tasks.append((isin, url, ref))
 
-            # Process URLs in parallel (max 10 workers, handles 16 URLs in ~50s)
+            # Log what we're checking
+            url_count = len(tasks)
+            etf_names = [REFERENCE_DATA[isin]['name'] for isin in SOURCES.keys()
+                         if not target_isin or isin == target_isin]
+
+            # Process URLs in parallel (max 10 workers)
+            # Now processes 8 URLs (single ETF) or 16 (all) depending on request
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 
@@ -397,7 +427,9 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Agent-only workflow (16 parallel calls) - intelligent extraction & comparison with Claude Haiku'
+                'checked_isin': target_isin,  # Which ETF was checked (or None for all)
+                'url_count': url_count,
+                'note': f'Checked {url_count} URLs for {len(etf_names)} ETF(s) - intelligent extraction with Claude Haiku'
             }
 
             # Send response

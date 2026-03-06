@@ -136,6 +136,69 @@ header h1 {
     background: var(--gray-300);
 }
 
+/* ETF Buttons */
+.etf-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.btn-etf {
+    background: #4CAF50;
+    color: white;
+    min-width: 160px;
+    position: relative;
+    flex: 1;
+    max-width: 200px;
+}
+
+.btn-etf:hover:not(:disabled) {
+    background: #45a049;
+}
+
+.btn-all {
+    background: #2196F3;
+    color: white;
+    min-width: 200px;
+}
+
+.btn-all:hover:not(:disabled) {
+    background: #1976D2;
+}
+
+.btn-label {
+    display: inline-block;
+}
+
+.status-indicator {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid white;
+}
+
+.status-indicator.success {
+    background: #4CAF50;
+}
+
+.status-indicator.error {
+    background: #f44336;
+}
+
+.last-checked-info {
+    text-align: center;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
 /* Progress */
 .progress-container {
     margin-top: 1.5rem;
