@@ -288,27 +288,17 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         """Handle POST request to start monitoring"""
         try:
-            # Parse request body to get optional ISIN filter
-            content_length = int(self.headers.get('Content-Length', 0))
-            body = self.rfile.read(content_length).decode('utf-8') if content_length > 0 else '{}'
-            request_data = json.loads(body)
-            filter_isin = request_data.get('isin')  # Optional: check only this ISIN
-
             results = []
 
-            # Collect URLs to check (filtered by ISIN if specified)
+            # Collect all URLs to check (18 total)
             tasks = []
             for isin, urls in SOURCES.items():
-                # Skip if filter_isin is set and doesn't match
-                if filter_isin and isin != filter_isin:
-                    continue
-
                 ref = REFERENCE_DATA[isin]
-                # Check all URLs for this ISIN (9 URLs)
+                # Check all URLs for this ISIN (9 URLs per ETF = 18 total)
                 for url in urls:
                     tasks.append((isin, url, ref))
 
-            # Process URLs in parallel (max 10 workers, handles 9 URLs per request)
+            # Process URLs in parallel (max 10 workers, handles 18 URLs in ~57s)
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 
