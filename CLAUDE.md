@@ -14,8 +14,9 @@ Web-first monitoring dashboard with per-ETF architecture for reliable, fast ETF 
    - Scales to 10+ ETFs easily
 
 2. **Centralized Configuration**
-   - `api/config.py` is single source of truth
-   - Adding ETFs = config change only
+   - Configuration section at top of `api/monitor.py`
+   - Adding ETFs = edit ETFS dict only
+   - ISIN_TEMPLATES automatically apply to all ETFs
    - Extensible for new datapoints (AUM, inception date, etc.)
 
 3. **No Unnecessary Features**
@@ -68,17 +69,16 @@ Frontend displays grouped results with visual indicators
 
 ### Configuration System
 
-**Single File:** `/api/config.py`
+**Location:** Top of `/api/monitor.py` (CONFIGURATION section)
 
 ```
-ETFS = { ... }                 # ETF definitions
-DATAPOINT_CONFIG = { ... }     # What to extract
-ISIN_TEMPLATES = [ ... ]       # URL patterns
+ETFS = { ... }                 # ETF definitions (name, TER)
+ISIN_TEMPLATES = [ ... ]       # URL patterns (auto-applied)
 SOURCES_OVERRIDE = { ... }     # ETF-specific URLs
 ```
 
-**Adding New ETF:** Edit config.py only, no code changes needed
-**Adding New Datapoint:** Update DATAPOINT_CONFIG + extraction logic
+**Adding New ETF:** Edit ETFS dict in monitor.py, add custom URLs to SOURCES_OVERRIDE
+**Adding New Datapoint:** Add field to ETFS + update extraction logic
 
 ### Extraction Strategy
 
@@ -125,17 +125,22 @@ SOURCES_OVERRIDE = { ... }     # ETF-specific URLs
 
 **Add New ETF:**
 ```python
-# config.py
+# monitor.py - CONFIGURATION section
 ETFS["LU9999999999"] = {
     "name": "New ETF Name",
     "short_name": "NEW",
-    "datapoints": {"ter": 0.45}
+    "ter": 0.45
 }
+
+SOURCES_OVERRIDE["LU9999999999"] = [
+    "https://www.onvista.de/etf/...",
+    "https://de.finance.yahoo.com/quote/..."
+]
 ```
 
-**Add New Source:**
+**Add New Source to existing ETF:**
 ```python
-# config.py
+# monitor.py - CONFIGURATION section
 SOURCES_OVERRIDE["LU3098954871"].append(
     "https://newsite.com/etf/..."
 )
@@ -223,19 +228,19 @@ git push
 ### File Ownership
 
 **You should edit:**
-- `api/config.py` - ETF/datapoint configuration
+- `api/monitor.py` (CONFIGURATION section) - Add/remove ETFs
 - `public/css/style.css` - UI styling
 - `README.md` - User documentation
 
 **You probably shouldn't edit:**
-- `api/monitor.py` - Core logic (stable)
+- `api/monitor.py` (extraction logic) - Core logic (stable)
 - `public/js/app.js` - Frontend logic (stable)
 - `public/index.html` - Structure (stable)
 
 ### Questions for New Developers
 
 1. **How do I add a new ETF?**
-   → Edit `api/config.py`, add to ETFS dict
+   → Edit CONFIGURATION section in `api/monitor.py`
 
 2. **How do I change button colors?**
    → Edit CSS variables in `public/css/style.css`

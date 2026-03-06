@@ -49,8 +49,7 @@ That's it! Open your Vercel URL.
 - `js/app.js` - Per-ETF monitoring logic
 
 ### Backend (`/api`)
-- `monitor.py` - Serverless function (Vercel)
-- `config.py` - Centralized ETF/datapoint configuration
+- `monitor.py` - Serverless function with configuration section
 
 ### Tech Stack
 - **Frontend:** Vanilla JS, CSS (no frameworks)
@@ -60,16 +59,14 @@ That's it! Open your Vercel URL.
 
 ## Adding New ETFs
 
-Edit `/api/config.py`:
+Edit `/api/monitor.py` (CONFIGURATION section at top):
 
 ```python
 ETFS = {
     "LU1234567890": {
         "name": "New ETF Name",
         "short_name": "NEW",
-        "datapoints": {
-            "ter": 0.50
-        }
+        "ter": 0.50
     },
     # ... existing ETFs
 }
@@ -82,34 +79,27 @@ SOURCES_OVERRIDE = {
 }
 ```
 
-Deploy and done! No code changes needed.
+Deploy and done! The ISIN_TEMPLATES will automatically apply to the new ETF.
 
 ## Adding New Datapoints (Future)
 
 To add AUM tracking:
 
-1. Update `config.py`:
+1. Add field to ETFS in `monitor.py`:
 ```python
-DATAPOINT_CONFIG = {
-    "aum": {
-        "label": "Assets Under Management",
-        "unit": "M€",
-        "keywords": ['AUM', 'Fondsvermögen'],
-        "regex": r'(\d+[.,]?\d*)\s*(?:M€|Mio)',
-        "required": False
+ETFS = {
+    "LU3098954871": {
+        "name": "...",
+        "short_name": "TEQ",
+        "ter": 0.69,
+        "aum": 250.5  # New field
     }
 }
 ```
 
-2. Add to ETF configs:
-```python
-"datapoints": {
-    "ter": 0.69,
-    "aum": 250.5
-}
-```
-
-3. Update extraction logic in `monitor.py` to handle new datapoint.
+2. Update `extract_with_agent()` to extract AUM from HTML
+3. Update `REFERENCE_DATA` to include new field
+4. Update frontend to display AUM
 
 ## Performance
 
@@ -127,8 +117,7 @@ etf-monitor/
 │   ├── css/style.css
 │   └── js/app.js
 ├── api/                 # Vercel serverless functions
-│   ├── monitor.py       # Main API endpoint
-│   └── config.py        # ETF/datapoint configuration
+│   └── monitor.py       # Main API endpoint with configuration
 ├── .env                 # Environment variables
 ├── vercel.json          # Vercel config
 └── README.md            # This file

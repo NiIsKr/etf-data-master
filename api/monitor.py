@@ -8,7 +8,6 @@ from http.server import BaseHTTPRequestHandler
 import requests
 from anthropic import Anthropic
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from config import ETFS, get_all_isins, get_sources_for_isin
 
 # Create reusable session with connection pooling
 _session = None
@@ -30,20 +29,72 @@ def get_session():
 
     return _session
 
-# Build reference data dynamically from config
-REFERENCE_DATA = {
-    isin: {
-        "name": config["name"],
-        "ter": config["datapoints"]["ter"]
+# ============================================================================
+# CONFIGURATION - Single Source of Truth
+# ============================================================================
+# To add a new ETF:
+# 1. Add entry to ETFS dict below
+# 2. Add URLs to SOURCES dict below
+# 3. Deploy - no other code changes needed!
+# ============================================================================
+
+ETFS = {
+    "LU3098954871": {
+        "name": "TEQ - General Artificial Intelligence R EUR UCITS ETF (Acc)",
+        "short_name": "TEQ",
+        "ter": 0.69
+    },
+    "LU3075459852": {
+        "name": "Inyova Impact Investing Active Equity Fund UCITS ETF EUR",
+        "short_name": "Inyova",
+        "ter": 0.95
     }
-    for isin, config in ETFS.items()
 }
 
-# Build sources dynamically from config
-SOURCES = {
-    isin: get_sources_for_isin(isin)
-    for isin in get_all_isins()
+# ISIN-based URL templates (automatically applied to all ETFs)
+ISIN_TEMPLATES = [
+    "https://www.justetf.com/de/etf-profile.html?isin={ISIN}",
+    "https://extraetf.com/de/etf-profile/{ISIN}",
+    "https://www.finanzfluss.de/informer/etf/{isin_lower}/",
+    "https://www.comdirect.de/inf/etfs/{ISIN}",
+    "https://www.avl-investmentfonds.de/fonds/details/{ISIN}",
+]
+
+# ETF-specific URLs (for sites that don't use ISIN patterns)
+SOURCES_OVERRIDE = {
+    "LU3098954871": [
+        "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
+        "https://de.finance.yahoo.com/quote/TGAI.DE/",
+        "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
+    ],
+    "LU3075459852": [
+        "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
+        "https://de.finance.yahoo.com/quote/INY0.DE/",
+        "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
+    ]
 }
+
+# Build reference data from ETFS
+REFERENCE_DATA = {
+    isin: {
+        "name": etf["name"],
+        "ter": etf["ter"]
+    }
+    for isin, etf in ETFS.items()
+}
+
+# Build sources by combining templates + overrides
+SOURCES = {}
+for isin in ETFS.keys():
+    urls = []
+    # Add template-based URLs
+    for template in ISIN_TEMPLATES:
+        url = template.format(ISIN=isin, isin_lower=isin.lower())
+        urls.append(url)
+    # Add ETF-specific URLs
+    if isin in SOURCES_OVERRIDE:
+        urls.extend(SOURCES_OVERRIDE[isin])
+    SOURCES[isin] = urls
 
 # Domain-specific timeout configuration
 TIMEOUT_CONFIG = {
