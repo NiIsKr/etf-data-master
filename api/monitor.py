@@ -66,6 +66,64 @@ def fetch_url(url, timeout=4):
         return None
 
 
+def extract_with_heuristics(html, reference_name, reference_ter):
+    """
+    Fast heuristic extraction using regex (no LLM).
+    Returns extracted name and TER, or None if not found.
+    """
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    # Extract name (priority order)
+    name = None
+
+    # Try og:title
+    og_title = soup.find('meta', property='og:title')
+    if og_title and og_title.get('content'):
+        name = og_title['content'].strip()
+
+    # Try h1
+    if not name:
+        h1 = soup.find('h1')
+        if h1:
+            name = h1.get_text().strip()
+
+    # Try title
+    if not name:
+        title = soup.find('title')
+        if title:
+            name = title.get_text().strip()
+
+    # Extract TER
+    ter = None
+    import re
+
+    text = soup.get_text()
+    ter_keywords = ['TER', 'Total Expense Ratio', 'Gesamtkostenquote', 'laufende Kosten', 'Kostenquote']
+
+    for keyword in ter_keywords:
+        if keyword.lower() in text.lower():
+            # Find percentage near keyword
+            idx = text.lower().find(keyword.lower())
+            context = text[max(0, idx-50):idx+100]
+
+            # Match percentage: 0.69% or 0,69% or 69 bps
+            match = re.search(r'(\d+[.,]\d{1,4})\s*(?:%|bps)?', context)
+            if match:
+                ter_str = match.group(1).replace(',', '.')
+                ter_value = float(ter_str)
+
+                # Convert bps to percentage if needed
+                if 'bps' in context.lower():
+                    ter_value = ter_value / 100
+
+                ter = ter_value
+                break
+
+    return name, ter
+
+
 def extract_with_agent(html, url, reference_name, reference_ter):
     """
     Use Claude Haiku to intelligently extract and compare ETF data.
@@ -83,9 +141,9 @@ def extract_with_agent(html, url, reference_name, reference_ter):
             'explanation': 'ANTHROPIC_API_KEY not configured'
         }
 
-    # Truncate HTML if too long (keep first 30000 chars - focus on main content)
-    if len(html) > 30000:
-        html = html[:30000]
+    # Truncate HTML if too long (keep first 8000 chars to reduce tokens)
+    if len(html) > 8000:
+        html = html[:8000]
 
     prompt = f"""Du bist ein ETF-Daten-Extractor. Analysiere diese Website und vergleiche die Daten mit den Referenzwerten.
 
@@ -201,24 +259,55 @@ def process_single_url(isin, url, ref):
             'explanation': 'Failed to fetch URL',
             'error': 'Failed to fetch URL (timeout or HTTP error)'
         }
-    else:
-        # Use agent to extract and compare
-        agent_result = extract_with_agent(
-            html,
-            url,
-            ref['name'],
-            ref['ter']
-        )
+
+    # Try heuristic extraction first (fast, no LLM)
+    heuristic_name, heuristic_ter = extract_with_heuristics(html, ref['name'], ref['ter'])
+
+    # If heuristic found both name and TER, use it (no agent needed!)
+    if heuristic_name and heuristic_ter is not None:
+        # Compare with reference
+        def normalize_name(name):
+            return ' '.join(name.strip().split())
+
+        name_match = normalize_name(heuristic_name) == normalize_name(ref['name'])
+        ter_match = round(heuristic_ter, 4) == round(ref['ter'], 4)
+
+        if name_match and ter_match:
+            status = 'MATCH'
+        elif not name_match and not ter_match:
+            status = 'BOTH_MISMATCH'
+        elif not name_match:
+            status = 'NAME_MISMATCH'
+        else:
+            status = 'TER_MISMATCH'
 
         return {
             'isin': isin,
             'url': url,
-            'name': agent_result.get('extracted_name'),
-            'ter': agent_result.get('extracted_ter'),
-            'status': agent_result.get('status'),
-            'explanation': agent_result.get('explanation'),
-            'error': None if agent_result.get('status') != 'FETCH_ERROR' else agent_result.get('explanation')
+            'name': heuristic_name,
+            'ter': heuristic_ter,
+            'status': status,
+            'explanation': f'Heuristic extraction: {status}',
+            'error': None
         }
+
+    # Fallback to agent if heuristic failed
+    agent_result = extract_with_agent(
+        html,
+        url,
+        ref['name'],
+        ref['ter']
+    )
+
+    return {
+        'isin': isin,
+        'url': url,
+        'name': agent_result.get('extracted_name'),
+        'ter': agent_result.get('extracted_ter'),
+        'status': agent_result.get('status'),
+        'explanation': agent_result.get('explanation'),
+        'error': None if agent_result.get('status') != 'FETCH_ERROR' else agent_result.get('explanation')
+    }
 
 
 class handler(BaseHTTPRequestHandler):
