@@ -9,6 +9,26 @@ import requests
 from anthropic import Anthropic
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Create reusable session with connection pooling
+_session = None
+
+def get_session():
+    """Get or create reusable requests session"""
+    global _session
+    if _session is None:
+        _session = requests.Session()
+
+        # Connection pooling (reuse TCP connections)
+        from requests.adapters import HTTPAdapter
+        adapter = HTTPAdapter(
+            pool_connections=10,  # Match ThreadPoolExecutor workers
+            pool_maxsize=20
+        )
+        _session.mount('http://', adapter)
+        _session.mount('https://', adapter)
+
+    return _session
+
 # Reference data (embedded)
 REFERENCE_DATA = {
     "LU3098954871": {
@@ -51,15 +71,71 @@ SOURCES = {
     ]
 }
 
+# Domain-specific timeout configuration
+TIMEOUT_CONFIG = {
+    # Fast German sites (< 3s typical)
+    "justetf.com": 6,
+    "extraetf.com": 6,
+    "comdirect.de": 6,
+    "onvista.de": 6,
+    "deutsche-boerse.com": 6,
 
-def fetch_url(url, timeout=4):
-    """Fetch HTML from URL"""
+    # Medium speed sites (3-5s)
+    "finanzfluss.de": 8,
+    "avl-investmentfonds.de": 8,
+
+    # Slow international sites (5-8s) - THE FIX!
+    "finanzen.net": 10,
+    "finance.yahoo.com": 10,
+
+    # Default for unknown
+    "default": 8
+}
+
+def get_timeout_for_url(url):
+    """Get appropriate timeout based on domain"""
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc
+
+    for known_domain, timeout in TIMEOUT_CONFIG.items():
+        if known_domain in domain:
+            return timeout
+
+    return TIMEOUT_CONFIG["default"]
+
+
+def fetch_url(url, timeout=None):
+    """Fetch HTML from URL with smart timeout"""
+    # Use domain-specific timeout if not provided
+    if timeout is None:
+        timeout = get_timeout_for_url(url)
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; ETF-Monitor/1.0)",
-        "Accept-Language": "de-DE,de;q=0.9,en;q=0.8"
+        # Chrome 130 User-Agent (most common browser 2026)
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+
+        # Standard HTML acceptance
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+
+        # Enable compression (70% faster transfer!)
+        "Accept-Encoding": "gzip, deflate, br",
+
+        # Language preferences
+        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+
+        # Appear to come from Google (some sites whitelist Google)
+        "Referer": "https://www.google.com/",
+
+        # Modern browser security headers
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
+        "Upgrade-Insecure-Requests": "1"
     }
+
     try:
-        response = requests.get(url, headers=headers, timeout=timeout, allow_redirects=True)
+        session = get_session()  # Use pooled connection
+        response = session.get(url, headers=headers, timeout=timeout, allow_redirects=True)
         response.raise_for_status()
         return response.text
     except Exception:
@@ -247,8 +323,8 @@ def process_single_url(isin, url, ref):
     """Process a single URL (used for parallel processing)"""
     import time
 
-    # Fetch HTML
-    html = fetch_url(url, timeout=4)
+    # Fetch HTML (uses smart timeout: 6-10s depending on domain)
+    html = fetch_url(url)
 
     if html is None:
         # Failed to fetch
