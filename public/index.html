@@ -9,8 +9,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>ETF Monitor</h1>
-            <p class="subtitle">Überwache ETF-Namen und TER auf 18 Finanz-Websites</p>
+            <h1>ETF Data Monitor</h1>
         </header>
 
         <div class="card">
@@ -32,10 +31,6 @@
                     <button id="checkInyovaBtn" class="btn btn-etf" data-isin="LU3075459852">
                         <span class="btn-label">Check Inyova</span>
                         <span id="inyovaStatus" class="status-indicator"></span>
-                    </button>
-
-                    <button id="checkAllBtn" class="btn btn-all">
-                        Check ALL (⚠️ Slower)
                     </button>
                 </div>
 
@@ -81,28 +76,6 @@
 
                     <div id="resultsList" class="results-list"></div>
                 </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <h2>Einstellungen</h2>
-            </div>
-            <div class="card-body">
-                <div class="form-group">
-                    <label for="slackWebhook">Slack Webhook URL (optional)</label>
-                    <input
-                        type="text"
-                        id="slackWebhook"
-                        placeholder="https://hooks.slack.com/services/..."
-                        class="form-input"
-                    >
-                    <p class="form-help">
-                        Erhalte Benachrichtigungen bei neuen Fehlern oder behobenen Problemen.
-                        <a href="https://api.slack.com/messaging/webhooks" target="_blank">Webhook erstellen</a>
-                    </p>
-                </div>
-                <button id="saveSettings" class="btn btn-secondary">Einstellungen speichern</button>
             </div>
         </div>
 

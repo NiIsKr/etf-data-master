@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler
 import requests
 from anthropic import Anthropic
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from config import ETFS, get_all_isins, get_sources_for_isin
 
 # Create reusable session with connection pooling
 _session = None
@@ -29,44 +30,19 @@ def get_session():
 
     return _session
 
-# Reference data (embedded)
+# Build reference data dynamically from config
 REFERENCE_DATA = {
-    "LU3098954871": {
-        "name": "TEQ - General Artificial Intelligence R EUR UCITS ETF (Acc)",
-        "ter": 0.69
-    },
-    "LU3075459852": {
-        "name": "Inyova Impact Investing Active Equity Fund UCITS ETF EUR",
-        "ter": 0.95
+    isin: {
+        "name": config["name"],
+        "ter": config["datapoints"]["ter"]
     }
+    for isin, config in ETFS.items()
 }
 
-# Source URLs (embedded) - Full list (8 per ETF = 16 total)
+# Build sources dynamically from config
 SOURCES = {
-    "LU3098954871": [
-        # ISIN-based URLs (5)
-        "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871",
-        "https://extraetf.com/de/etf-profile/LU3098954871",
-        "https://www.finanzfluss.de/informer/etf/lu3098954871/",
-        "https://www.comdirect.de/inf/etfs/LU3098954871",
-        "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
-        # Hardcoded URLs (3) - Removed finanzen.net due to Akamai bot protection
-        "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
-        "https://de.finance.yahoo.com/quote/TGAI.DE/",
-        "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
-    ],
-    "LU3075459852": [
-        # ISIN-based URLs (5)
-        "https://www.justetf.com/de/etf-profile.html?isin=LU3075459852",
-        "https://extraetf.com/de/etf-profile/LU3075459852",
-        "https://www.finanzfluss.de/informer/etf/lu3075459852/",
-        "https://www.comdirect.de/inf/etfs/LU3075459852",
-        "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
-        # Hardcoded URLs (3) - Removed finanzen.net due to Akamai bot protection
-        "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
-        "https://de.finance.yahoo.com/quote/INY0.DE/",
-        "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
-    ]
+    isin: get_sources_for_isin(isin)
+    for isin in get_all_isins()
 }
 
 # Domain-specific timeout configuration

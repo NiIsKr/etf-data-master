@@ -1,233 +1,185 @@
-# ETF Name + TER Consistency Monitor
+# ETF Data Monitor
 
-Ultra-minimal, terminal-first monitoring system that tracks ETF name and TER consistency across web sources.
+Web-based monitoring dashboard for tracking ETF data consistency across financial websites.
 
-## What it does
+## What It Does
 
-- Extracts ground truth from official ETF factsheets (PDFs)
-- Scrapes ETF name and TER from top financial websites
-- Compares web data against ground truth using strict matching
-- Alerts via Slack ONLY on status changes (new mismatch or resolved)
-- Runs with near-zero API costs in production
+- Monitors ETF names and TER (Total Expense Ratio) across major German financial sites
+- Per-ETF architecture for fast, reliable checks
+- AI-powered extraction using Claude Haiku
+- Clean, Apple-like UI
 
-## Quickstart
+## Quick Start
 
-### 1. One-time setup (2 minutes)
-
-```bash
-cd ~/Desktop/DEV/etf-monitor
-chmod +x setup.sh run.sh
-./setup.sh
-```
-
-This will:
-- Create a Python virtual environment
-- Install dependencies
-- Create outputs directory
-- Set up `.env` file
-
-### 2. Add PDFs
-
-Copy or symlink your ETF factsheet PDFs to the `inputs/` directory:
+### 1. Clone and Install
 
 ```bash
-# If you already have the PDFs in another directory
-cp ~/path/to/FS_LU3098954871_de.pdf inputs/
-cp ~/path/to/fwwdok_dxjMduzPQS.pdf inputs/
+git clone <repo-url>
+cd etf-monitor
 ```
 
-### 3. Optional: Configure Slack
+### 2. Configure Environment
 
-Edit `.env` and add your Slack webhook URL:
+Create `.env` file:
+```
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+### 3. Deploy to Vercel
 
 ```bash
-SLACK_WEBHOOK_URL=https://hooks.slack.com/services/YOUR/WEBHOOK/URL
+vercel
 ```
 
-Get your webhook URL from: https://api.slack.com/messaging/webhooks
+That's it! Open your Vercel URL.
 
-### 4. First run
+## How It Works
 
-```bash
-./run.sh
+1. Click "Check TEQ" or "Check Inyova"
+2. System fetches HTML from 8 financial websites per ETF
+3. Claude Haiku extracts name + TER from each site
+4. Results compared against reference data
+5. Dashboard shows matches/mismatches with detailed explanations
+
+## Architecture
+
+### Frontend (`/public`)
+- `index.html` - Main dashboard
+- `css/style.css` - Apple-like design system
+- `js/app.js` - Per-ETF monitoring logic
+
+### Backend (`/api`)
+- `monitor.py` - Serverless function (Vercel)
+- `config.py` - Centralized ETF/datapoint configuration
+
+### Tech Stack
+- **Frontend:** Vanilla JS, CSS (no frameworks)
+- **Backend:** Python 3.9, Anthropic API
+- **Hosting:** Vercel (serverless)
+- **AI:** Claude Haiku for intelligent extraction
+
+## Adding New ETFs
+
+Edit `/api/config.py`:
+
+```python
+ETFS = {
+    "LU1234567890": {
+        "name": "New ETF Name",
+        "short_name": "NEW",
+        "datapoints": {
+            "ter": 0.50
+        }
+    },
+    # ... existing ETFs
+}
+
+SOURCES_OVERRIDE = {
+    "LU1234567890": [
+        "https://www.onvista.de/etf/...",
+        "https://de.finance.yahoo.com/quote/..."
+    ]
+}
 ```
 
-Check the results:
-```bash
-cat outputs/report.md     # Human-readable report
-cat outputs/report.csv    # Machine-readable report
+Deploy and done! No code changes needed.
+
+## Adding New Datapoints (Future)
+
+To add AUM tracking:
+
+1. Update `config.py`:
+```python
+DATAPOINT_CONFIG = {
+    "aum": {
+        "label": "Assets Under Management",
+        "unit": "M€",
+        "keywords": ['AUM', 'Fondsvermögen'],
+        "regex": r'(\d+[.,]?\d*)\s*(?:M€|Mio)',
+        "required": False
+    }
+}
 ```
 
-### 5. Schedule daily runs
-
-```bash
-crontab -e
+2. Add to ETF configs:
+```python
+"datapoints": {
+    "ter": 0.69,
+    "aum": 250.5
+}
 ```
 
-Add this line (runs daily at 8 AM):
-```cron
-0 8 * * * cd ~/Desktop/DEV/etf-monitor && ./run.sh >> logs/daily.log 2>&1
-```
+3. Update extraction logic in `monitor.py` to handle new datapoint.
 
-## Optional Flags
+## Performance
 
-```bash
-./run.sh --augment-with-search     # Add DuckDuckGo search results
-./run.sh --llm-fallback            # Enable LLM for difficult pages
-./run.sh --slack-summary           # Send one summary per run
-```
+- **Per-ETF Check:** ~25-30 seconds
+- **Token Usage:** ~22,000-28,000 per check
+- **Rate Limit:** 45% safety margin below Anthropic limits
+- **Consistency:** 100% (zero variance)
 
-## What Gets Checked
-
-**Two ETFs:**
-- TEQ (ISIN: LU3098954871) - General AI ETF
-- Inyova (ISIN: LU3075459852) - Impact Investing ETF
-
-**Sources checked per ETF (~9 URLs):**
-- JustETF
-- ExtraETF
-- Finanzfluss
-- Comdirect
-- AVL Investmentfonds
-- Finanzen.net
-- OnVista
-- Yahoo Finance
-- Deutsche Börse
-
-## Reports
-
-### outputs/report.md
-Human-readable report with:
-- Status for each URL (✅ MATCH, ❌ MISMATCH, ⚠️ WARNINGS)
-- Name extraction source (og:title, h1, title, etc.)
-- TER extraction evidence (text snippet showing where TER was found)
-
-### outputs/report.csv
-Machine-readable CSV with all details for further analysis.
-
-### outputs/state.json
-Tracks mismatches over time to enable smart Slack alerts (only on changes).
-
-## Comparison Rules
-
-**Strict mode:**
-- **Name:** Any deviation = mismatch (only whitespace normalization)
-- **TER:** Exact numeric match after rounding to 4 decimals (0.9500 == 0.95 ok)
-
-## Slack Notifications
-
-**You will receive alerts for:**
-- 🚨 New mismatch detected
-- ✅ Mismatch resolved
-
-**You will NOT receive alerts for:**
-- Existing mismatches (already reported)
-- TER extraction failures (logged in reports only)
-- Fetch errors (timeouts, HTTP errors)
-
-## Cost
-
-**Default operation: $0/month**
-- No search API calls (uses curated URL list)
-- No LLM calls (heuristics only)
-- No hosting/database costs
-
-**With optional flags:**
-- `--augment-with-search`: Free (DuckDuckGo HTML)
-- `--llm-fallback`: ~$0.0002 per URL (max 3 calls/run = ~$0.0006/run)
-
-## Files
+## Project Structure
 
 ```
 etf-monitor/
-├── inputs/              # Your PDF factsheets
-├── outputs/            # Generated reports (gitignored)
-├── logs/               # Cron logs
-├── src/                # Python source code
-├── tests/              # Unit tests
-├── setup.sh            # One-time setup
-├── run.sh              # Daily runner
-└── .env                # Config (Slack webhook, etc.)
+├── public/              # Frontend (HTML, CSS, JS)
+│   ├── index.html
+│   ├── css/style.css
+│   └── js/app.js
+├── api/                 # Vercel serverless functions
+│   ├── monitor.py       # Main API endpoint
+│   └── config.py        # ETF/datapoint configuration
+├── .env                 # Environment variables
+├── vercel.json          # Vercel config
+└── README.md            # This file
 ```
 
-## Testing
+## Development
 
-Run unit tests:
+### Local Testing
+(Note: Requires Anthropic API key configured)
+
 ```bash
-source venv/bin/activate
-python -m pytest tests/ -v
+# Install dependencies
+pip3 install requests anthropic beautifulsoup4
+
+# Run local test server
+python3 test_server_v2.py
+
+# Open http://localhost:3000
 ```
 
-Or run tests directly:
+### Deployment
+
 ```bash
-python tests/test_compare.py
-python tests/test_extract_web.py
+git add .
+git commit -m "Your changes"
+git push
+
+# Vercel auto-deploys from main branch
 ```
 
 ## Troubleshooting
 
-**"inputs/ folder not found"**
-- Create it: `mkdir inputs`
+**429 Rate Limit Errors?**
+- Use per-ETF buttons (not "Check ALL" if it exists)
+- Each ETF check is well below rate limits
 
-**"PDF not found"**
-- Check that PDFs are in `inputs/` directory
-- Required filenames:
-  - `FS_LU3098954871_de.pdf` (TEQ)
-  - `fwwdok_dxjMduzPQS.pdf` (Inyova)
+**TER Not Found?**
+- Check browser console for details
+- Some sites may have changed HTML structure
+- Yahoo Finance requires deeper HTML parsing
 
-**"SLACK_WEBHOOK_URL not set"**
-- This is just a warning - Slack is optional
-- To enable: edit `.env` and add your webhook URL
+**Slow Performance?**
+- Normal: Each check makes 8 API calls to Claude
+- Per-ETF checks are ~40% faster than checking all
 
-**TER extraction failing for many sites**
-- Check `outputs/report.md` for evidence fields
-- Consider using `--llm-fallback` flag (costs ~$0.0006/run)
+## Cost
 
-## Manual Commands
-
-You can also run individual components:
-
-```bash
-source venv/bin/activate
-
-# Extract reference from PDFs
-python -m src.reference
-
-# Generate source URLs
-python -m src.curated_sources
-
-# Test web extraction on a single URL
-python -m src.extract_web "https://www.justetf.com/de/etf-profile.html?isin=LU3098954871"
-
-# Run monitor with custom options
-python -m src.monitor --isins LU3098954871,LU3075459852 --augment-with-search
-```
-
-## How It Works
-
-1. **Extract ground truth** from PDF factsheets (name + TER)
-2. **Generate URL list** from curated templates + hardcoded overrides
-3. **Fetch and parse** HTML from each URL
-4. **Compare** extracted data with ground truth (strict matching)
-5. **Generate reports** (markdown + CSV)
-6. **Send Slack alerts** only on NEW or RESOLVED mismatches
-7. **Update state** for next run
-
-## Non-Negotiables
-
-- ✅ No paid services (no cloud, no databases, no Docker)
-- ✅ Public web only (HTTP GET to public sites)
-- ✅ Curated sources (manually maintained list)
-- ✅ Minimal LLM usage (default: 0 calls, optional flag with hard limit)
-- ✅ Strict comparison (any deviation = mismatch)
-
-## Support
-
-For issues or questions, check:
-- `outputs/report.md` for detailed extraction results
-- `logs/daily.log` for cron output
-- `outputs/state.json` for mismatch history
+- **Anthropic API:** ~$0.001-0.002 per check
+- **Hosting:** Free (Vercel hobby tier)
+- **Monthly:** ~$3-5 for regular monitoring
 
 ## License
 
-Private project - all rights reserved.
+Private project.

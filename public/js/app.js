@@ -5,14 +5,11 @@ let monitoringInProgress = false;
 // DOM Elements
 const checkTeqBtn = document.getElementById('checkTeqBtn');
 const checkInyovaBtn = document.getElementById('checkInyovaBtn');
-const checkAllBtn = document.getElementById('checkAllBtn');
 const progressContainer = document.getElementById('progress');
 const progressBar = document.getElementById('progressBar');
 const progressText = document.getElementById('progressText');
 const resultsContainer = document.getElementById('resultsContainer');
 const resultsList = document.getElementById('resultsList');
-const slackWebhookInput = document.getElementById('slackWebhook');
-const saveSettingsBtn = document.getElementById('saveSettings');
 
 // Status indicators
 const teqStatus = document.getElementById('teqStatus');
@@ -26,29 +23,6 @@ const totalMatches = document.getElementById('totalMatches');
 const totalMismatches = document.getElementById('totalMismatches');
 const totalMissing = document.getElementById('totalMissing');
 const lastUpdate = document.getElementById('lastUpdate');
-
-// Load settings from localStorage
-function loadSettings() {
-    const slackWebhook = localStorage.getItem('slackWebhook');
-    if (slackWebhook) {
-        slackWebhookInput.value = slackWebhook;
-    }
-}
-
-// Save settings to localStorage
-function saveSettings() {
-    const slackWebhook = slackWebhookInput.value.trim();
-    localStorage.setItem('slackWebhook', slackWebhook);
-
-    const originalText = saveSettingsBtn.textContent;
-    saveSettingsBtn.textContent = '✓ Gespeichert!';
-    saveSettingsBtn.disabled = true;
-
-    setTimeout(() => {
-        saveSettingsBtn.textContent = originalText;
-        saveSettingsBtn.disabled = false;
-    }, 2000);
-}
 
 // Start monitoring (per-ETF or all)
 async function startMonitoring(isin = null) {
@@ -70,15 +44,11 @@ async function startMonitoring(isin = null) {
         etfName = 'Inyova';
         statusIndicator = inyovaStatus;
         lastCheckedElement = inyovaLastChecked;
-    } else {
-        button = checkAllBtn;
-        etfName = 'alle ETFs';
     }
 
     // Disable all buttons during check
     checkTeqBtn.disabled = true;
     checkInyovaBtn.disabled = true;
-    checkAllBtn.disabled = true;
 
     const originalText = button.querySelector('.btn-label')?.textContent || button.textContent;
     if (button.querySelector('.btn-label')) {
@@ -91,15 +61,11 @@ async function startMonitoring(isin = null) {
     resultsContainer.style.display = 'none';
 
     try {
-        const slackWebhook = localStorage.getItem('slackWebhook') || '';
-
         progressText.textContent = `Starte ${etfName} Check...`;
         progressBar.style.width = '10%';
 
         // Build request body
-        const requestBody = {
-            slack_webhook: slackWebhook
-        };
+        const requestBody = {};
         if (isSingleETF) {
             requestBody.isin = isin;
         }
@@ -159,7 +125,6 @@ async function startMonitoring(isin = null) {
         // Re-enable all buttons
         checkTeqBtn.disabled = false;
         checkInyovaBtn.disabled = false;
-        checkAllBtn.disabled = false;
 
         // Restore button text
         if (button.querySelector('.btn-label')) {
@@ -388,8 +353,3 @@ function escapeHtml(text) {
 // Event listeners
 checkTeqBtn.addEventListener('click', () => startMonitoring('LU3098954871'));
 checkInyovaBtn.addEventListener('click', () => startMonitoring('LU3075459852'));
-checkAllBtn.addEventListener('click', () => startMonitoring());
-saveSettingsBtn.addEventListener('click', saveSettings);
-
-// Load settings on page load
-loadSettings();
