@@ -41,7 +41,7 @@ REFERENCE_DATA = {
     }
 }
 
-# Source URLs (embedded) - Full list (9 per ETF = 18 total, split across 2 requests)
+# Source URLs (embedded) - Full list (8 per ETF = 16 total)
 SOURCES = {
     "LU3098954871": [
         # ISIN-based URLs (5)
@@ -50,8 +50,7 @@ SOURCES = {
         "https://www.finanzfluss.de/informer/etf/lu3098954871/",
         "https://www.comdirect.de/inf/etfs/LU3098954871",
         "https://www.avl-investmentfonds.de/fonds/details/LU3098954871",
-        # Hardcoded URLs (4)
-        "https://www.finanzen.net/etf/teq-general-artificial-intelligence-etf-r-lu3098954871",
+        # Hardcoded URLs (3) - Removed finanzen.net due to Akamai bot protection
         "https://www.onvista.de/etf/TEQ-General-Artificial-Intelligence-EUR-UCITS-ETF-Acc-ETF-LU3098954871",
         "https://de.finance.yahoo.com/quote/TGAI.DE/",
         "https://live.deutsche-boerse.com/etf/teq-general-artificial-intelligence-eur-ucits-etf-acc"
@@ -63,8 +62,7 @@ SOURCES = {
         "https://www.finanzfluss.de/informer/etf/lu3075459852/",
         "https://www.comdirect.de/inf/etfs/LU3075459852",
         "https://www.avl-investmentfonds.de/fonds/details/LU3075459852",
-        # Hardcoded URLs (4)
-        "https://www.finanzen.net/etf/inyova-impact-investing-active-equity-fund-etf-lu3075459852",
+        # Hardcoded URLs (3) - Removed finanzen.net due to Akamai bot protection
         "https://www.onvista.de/etf/INY-I-IM-IN-ACT-EQ-EXCH-TRADED-ACT-NOM-EUR-ACC-ON-ETF-LU3075459852",
         "https://de.finance.yahoo.com/quote/INY0.DE/",
         "https://live.deutsche-boerse.com/etf/inyova-impact-investing-active-equity-fund-ucits-etf-eur"
@@ -366,15 +364,15 @@ class handler(BaseHTTPRequestHandler):
         try:
             results = []
 
-            # Collect all URLs to check (18 total)
+            # Collect all URLs to check (16 total)
             tasks = []
             for isin, urls in SOURCES.items():
                 ref = REFERENCE_DATA[isin]
-                # Check all URLs for this ISIN (9 URLs per ETF = 18 total)
+                # Check all URLs for this ISIN (8 URLs per ETF = 16 total)
                 for url in urls:
                     tasks.append((isin, url, ref))
 
-            # Process URLs in parallel (max 10 workers, handles 18 URLs in ~57s)
+            # Process URLs in parallel (max 10 workers, handles 16 URLs in ~50s)
             with ThreadPoolExecutor(max_workers=10) as executor:
                 futures = [executor.submit(process_single_url, isin, url, ref) for isin, url, ref in tasks]
 
@@ -399,7 +397,7 @@ class handler(BaseHTTPRequestHandler):
                 'success': True,
                 'results': results,
                 'reference': REFERENCE_DATA,
-                'note': 'Agent-only workflow (18 parallel calls) - intelligent extraction & comparison with Claude Haiku'
+                'note': 'Agent-only workflow (16 parallel calls) - intelligent extraction & comparison with Claude Haiku'
             }
 
             # Send response
