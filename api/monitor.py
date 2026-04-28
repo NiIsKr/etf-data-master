@@ -446,6 +446,21 @@ class handler(BaseHTTPRequestHandler):
                 out['text_first_500'] = r.text[:500]
                 out['has_isin'] = 'LU3098954871' in r.text
                 out['has_ter'] = any(k in r.text for k in ('TER', 'Gesamtkost', 'laufende Kosten'))
+                try:
+                    from bs4 import BeautifulSoup, Comment
+                    soup = BeautifulSoup(r.text, 'html.parser')
+                    for tag in soup(['script', 'style', 'noscript', 'svg', 'iframe', 'link']):
+                        tag.decompose()
+                    for c in soup.find_all(string=lambda t: isinstance(t, Comment)):
+                        c.extract()
+                    body = soup.find('body') or soup
+                    body_text = ' '.join(body.get_text(separator=' ', strip=True).split())
+                    out['condensed_body_len'] = len(body_text)
+                    out['condensed_body_first_2000'] = body_text[:2000]
+                    out['condensed_has_ter'] = any(k in body_text for k in ('TER', 'Gesamtkost', 'laufende Kosten'))
+                    out['condensed_has_069'] = ('0,69' in body_text) or ('0.69' in body_text)
+                except Exception as ce:
+                    out['condense_error'] = f'{type(ce).__name__}: {ce}'
             except Exception as e:
                 out['error'] = f'{type(e).__name__}: {e}'
             body = json.dumps(out, ensure_ascii=False, indent=2).encode('utf-8')
