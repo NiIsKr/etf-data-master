@@ -142,8 +142,10 @@ def fetch_url(url, timeout=None):
         # Standard HTML acceptance
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
 
-        # Enable compression (70% faster transfer!)
-        "Accept-Encoding": "gzip, deflate, br",
+        # Enable compression. Brotli (br) excluded because the Vercel Lambda
+        # runtime does not reliably decode it even with the brotli package
+        # installed — sites then return unreadable bytes.
+        "Accept-Encoding": "gzip, deflate",
 
         # Language preferences
         "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
