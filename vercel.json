@@ -6,10 +6,6 @@
       "dest": "/api/monitor.py"
     },
     {
-      "src": "/api/debug_fetch",
-      "dest": "/api/debug_fetch.py"
-    },
-    {
       "src": "/(.*)",
       "dest": "/public/$1"
     }

@@ -418,6 +418,46 @@ def process_single_url(isin, url, ref):
 
 
 class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        """Diagnostic endpoint: ?debug=1&url=<url> returns raw fetch info."""
+        from urllib.parse import urlparse, parse_qs
+        params = parse_qs(urlparse(self.path).query)
+        if params.get('debug') and params.get('url'):
+            target = params['url'][0]
+            out = {'url': target}
+            try:
+                import requests
+                debug_headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+                    "Referer": "https://www.google.com/",
+                }
+                r = requests.get(target, headers=debug_headers, timeout=10, allow_redirects=True)
+                out['status'] = r.status_code
+                out['final_url'] = r.url
+                out['content_type'] = r.headers.get('Content-Type')
+                out['content_encoding'] = r.headers.get('Content-Encoding')
+                out['server'] = r.headers.get('Server')
+                out['cf_ray'] = r.headers.get('CF-Ray')
+                out['text_len'] = len(r.text)
+                out['raw_first_200_hex'] = r.content[:200].hex()
+                out['text_first_500'] = r.text[:500]
+                out['has_isin'] = 'LU3098954871' in r.text
+                out['has_ter'] = any(k in r.text for k in ('TER', 'Gesamtkost', 'laufende Kosten'))
+            except Exception as e:
+                out['error'] = f'{type(e).__name__}: {e}'
+            body = json.dumps(out, ensure_ascii=False, indent=2).encode('utf-8')
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(405)
+        self.end_headers()
+
     def do_POST(self):
         """Handle POST request to start monitoring (single ETF or all)"""
         try:
