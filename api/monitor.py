@@ -242,16 +242,37 @@ def extract_with_agent(html, url, reference_name, reference_ter):
             'explanation': 'ANTHROPIC_API_KEY not configured'
         }
 
-    # Domain-specific HTML truncation
-    # Yahoo Finance needs more HTML to find TER data in JavaScript bundles
-    if 'finance.yahoo.com' in url:
-        max_chars = 12000  # Yahoo's TER data is deeper in HTML
-    elif 'finanzfluss.de' in url:
-        max_chars = 8000   # German sites are well-structured
-    else:
-        max_chars = 6000   # Default: balance between tokens and data
+    # Condense HTML: strip scripts/styles/noise, keep title + meta + visible
+    # body text. Naive prefix-truncation throws away the body where the TER
+    # actually lives (head + tracking scripts dominate the first ~6k chars on
+    # modern SPAs).
+    from bs4 import BeautifulSoup, Comment
+    soup = BeautifulSoup(html, 'html.parser')
+    for tag in soup(['script', 'style', 'noscript', 'svg', 'iframe', 'link']):
+        tag.decompose()
+    for c in soup.find_all(string=lambda t: isinstance(t, Comment)):
+        c.extract()
 
-    # Truncate HTML if too long
+    parts = []
+    title_tag = soup.find('title')
+    if title_tag:
+        t = title_tag.get_text(strip=True)
+        if t:
+            parts.append(f'TITLE: {t}')
+    for meta in soup.find_all('meta'):
+        key = meta.get('property') or meta.get('name') or ''
+        content = (meta.get('content') or '').strip()
+        if not key or not content:
+            continue
+        if any(k in key.lower() for k in ('title', 'description', 'og:', 'twitter:')):
+            parts.append(f'META {key}: {content}')
+
+    body = soup.find('body') or soup
+    body_text = ' '.join(body.get_text(separator=' ', strip=True).split())
+    parts.append(f'BODY: {body_text}')
+
+    html = '\n'.join(parts)
+    max_chars = 15000  # ~3.7k tokens of clean text — covers TER region on all sources tested
     if len(html) > max_chars:
         html = html[:max_chars]
 
