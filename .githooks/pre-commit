@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Pre-commit guard: block .env files and Anthropic API key patterns
+# Activated via: git config core.hooksPath .githooks
+
+set -e
+
+# 1. Block any .env file (any depth, any name like .env / .env.local etc — but NOT .env.example)
+blocked=$(git diff --cached --name-only | grep -E '(^|/)\.env(\.[a-zA-Z0-9_-]+)?$' | grep -v '\.env\.example$' || true)
+if [ -n "$blocked" ]; then
+  echo "✗ pre-commit: refusing to commit .env file(s):"
+  echo "$blocked" | sed 's/^/    /'
+  echo ""
+  echo "  These typically contain secrets. If this is intentional, bypass with --no-verify"
+  echo "  (but consider whether the secret should really be committed)."
+  exit 1
+fi
+
+# 2. Block Anthropic API key patterns in staged content
+key_hits=$(git diff --cached -U0 | grep -E 'sk-ant-(api03|admin01)-[A-Za-z0-9_-]{20,}' || true)
+if [ -n "$key_hits" ]; then
+  echo "✗ pre-commit: Anthropic API key pattern detected in staged changes."
+  echo "  Strip the key before committing."
+  exit 1
+fi
+
+# 3. Block common other key patterns (AWS, GitHub PAT, generic high-entropy)
+other_hits=$(git diff --cached -U0 | grep -E '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82})' || true)
+if [ -n "$other_hits" ]; then
+  echo "✗ pre-commit: AWS / GitHub token pattern detected in staged changes."
+  exit 1
+fi
+
+exit 0

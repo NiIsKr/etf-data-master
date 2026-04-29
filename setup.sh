@@ -28,7 +28,13 @@ if [ ! -f ".env" ]; then
   echo "⚠️  Please edit .env and add your SLACK_WEBHOOK_URL if desired"
 fi
 
-# 6. Sanity checks
+# 6. Activate repo-tracked git hooks (pre-commit secret guard)
+if [ -d ".git" ] && [ -d ".githooks" ]; then
+  git config core.hooksPath .githooks
+  echo "Git hooks activated (.githooks/pre-commit)"
+fi
+
+# 7. Sanity checks
 echo "Running sanity checks..."
 
 if [ ! -d "inputs" ]; then
